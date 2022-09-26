@@ -1,7 +1,8 @@
 import { existsSync, realpathSync } from 'fs'
 import { pathToFileURL } from 'url'
 import { joinURL } from 'ufo'
-import { isAbsolute } from 'pathe'
+import { isAbsolute, join, normalize } from 'pathe'
+import { PackageJson, readPackageJSON } from 'pkg-types'
 import { moduleResolve } from '../lib/import-meta-resolve'
 import { fileURLToPath, normalizeid } from './utils'
 import { pcall, BUILTIN_MODULES } from './_utils'
@@ -123,4 +124,46 @@ export function createResolve (defaults?: ResolveOptions) {
   return (id: string, url?: ResolveOptions['url']) => {
     return resolve(id, { url, ...defaults })
   }
+}
+
+export function parseNodeModulePath (path: string) {
+  if (!path) { return {} }
+  const match = /^(.+\/node_modules\/)([^@/]+|@[^/]+\/[^/]+)(\/?.*?)?$/.exec(normalize(path))
+  if (!match) { return {} }
+  const [, baseDir, pkgName, subpath] = match
+  return {
+    baseDir,
+    pkgName,
+    subpath
+  }
+}
+
+/** Reverse engineer a subpath export if possible */
+export async function resolveSubpath (resolvedPath: string) {
+  const { pkgName, subpath } = parseNodeModulePath(resolvedPath)
+
+  const { exports } = await readPackageJSON(resolvedPath) || {}
+  const resolvedSubpath = exports && findSubpath(subpath.replace(/^\//, './'), exports)
+
+  // Fall back to guessing
+  return resolvedSubpath ? join(pkgName, resolvedSubpath) : (pkgName + subpath.replace(/\.[a-z]+$/, ''))
+}
+
+// --- Internal ---
+
+function flattenExports (exports: Exclude<PackageJson['exports'], string>, path?: string) {
+  return Object.entries(exports).flatMap(([key, value]) => typeof value === 'string' ? [[path ?? key, value]] : flattenExports(value, path ?? key))
+}
+
+function findSubpath (path: string, exports: PackageJson['exports']) {
+  const relativePath = path.startsWith('.') ? path : ('./' + path)
+  const _exports = typeof exports === 'string' ? { '.': exports } : exports
+
+  if (relativePath in _exports) {
+    return relativePath
+  }
+
+  const flattenedExports = flattenExports(_exports)
+  const [foundPath] = flattenedExports.find(([_, resolved]) => resolved === path) || []
+  return foundPath
 }
