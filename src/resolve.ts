@@ -126,9 +126,11 @@ export function createResolve (defaults?: ResolveOptions) {
   }
 }
 
+const NODE_MODULES_RE = /^(.+\/node_modules\/)([^@/]+|@[^/]+\/[^/]+)(\/?.*?)?$/
+
 export function parseNodeModulePath (path: string) {
   if (!path) { return {} }
-  const match = /^(.+\/node_modules\/)([^@/]+|@[^/]+\/[^/]+)(\/?.*?)?$/.exec(normalize(path))
+  const match = NODE_MODULES_RE.exec(normalize(path))
   if (!match) { return {} }
   const [, baseDir, pkgName, subpath] = match
   return {
