@@ -144,11 +144,13 @@ export function parseNodeModulePath (path: string) {
 export async function resolveSubpath (resolvedPath: string) {
   const { pkgName, subpath } = parseNodeModulePath(resolvedPath)
 
+  if (!pkgName || !subpath) { return resolvedPath.replace(/\.[a-z]+$/, '') }
+
   const { exports } = await readPackageJSON(resolvedPath) || {}
   const resolvedSubpath = exports && findSubpath(subpath.replace(/^\//, './'), exports)
 
   // Fall back to guessing
-  return resolvedSubpath ? join(pkgName, resolvedSubpath) : (pkgName + subpath.replace(/\.[a-z]+$/, ''))
+  return resolvedSubpath ? join(pkgName, resolvedSubpath) : resolvedPath.replace(/\.[a-z]+$/, '')
 }
 
 // --- Internal ---
